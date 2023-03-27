@@ -1,0 +1,195 @@
+--shipment stops actual pu/del information conditional statement to determine WHICH stop is completed
+-- conditional statement to include whether heartbeat is stale
+with pickup as (
+select shipment_stops.shipment_id
+    , jobs.short_id
+    , 'https://ops.convoy.com/shipments/' || jobs.short_id as "LINK"
+    , carriers.name as "CARRIER"
+    , shipment_stops.location_name as "PU_LOCATION"
+    , shipment_stops.loading_type as "PU_STOP_TYPE"
+    , datediff(hour,CONVERT_TIMEZONE(shipment_stops.timezone, CURRENT_TIMESTAMP)::TIMESTAMP_NTZ, CONVERT_TIMEZONE(shipment_stops.timezone, shipment_stops.shipper_end_time)::TIMESTAMP_NTZ) as "HRS_TO_PU"
+    , CONVERT_TIMEZONE(shipment_stops.timezone, shipment_stops.arrived_at)::TIMESTAMP_NTZ as "PU_ARRIVED_AT"
+    , CONVERT_TIMEZONE(shipment_stops.timezone, shipment_stops.completed_at)::TIMESTAMP_NTZ as "PU_COMPLETED_AT"
+    , CONVERT_TIMEZONE(shipment_stops.timezone, shipment_stops.shipper_start_time)::TIMESTAMP_NTZ as "PU_START"
+    , CONVERT_TIMEZONE(shipment_stops.timezone, shipment_stops.shipper_end_time)::TIMESTAMP_NTZ as "PU_END"
+    , location_profiles.location_lon as "PU_LON"
+    , location_profiles.location_lat as "PU_LAT"
+    , location_profiles.address_clean as "PU_ADDRESS"
+    --can I convert lat/lon of heartbeats into address, then use location_profiles.address_clean to compare ETA between two?
+from core.shipment_stops
+    left join core.location_profiles on shipment_stops.location_profile_id = location_profiles.id
+    left join core.jobs on shipment_stops.shipment_id = jobs.id
+    left join core.carriers on jobs.carrier_id = carriers.id
+where order_index = '0'
+    and jobs.shipper_friendly_prefix = 'THO'
+     --add actual location profile IDs - and (PU_LOCATION ilike 'xxx-xxx-xxx-xxx' or PU_LOCATION ilike 'yyy-yyy-yyy-yyy')
+) ,
+
+STOP_1 as (
+select shipment_stops.shipment_id
+    , date_trunc(day,CONVERT_TIMEZONE(shipment_stops.timezone, shipment_stops.shipper_start_time)::TIMESTAMP_NTZ) as "RDD"
+    , datediff(hour,CONVERT_TIMEZONE(shipment_stops.timezone, CURRENT_TIMESTAMP)::TIMESTAMP_NTZ, CONVERT_TIMEZONE(shipment_stops.timezone, shipment_stops.shipper_end_time)::TIMESTAMP_NTZ) as "HRS_TO_STOP_1"
+    , shipment_stops.location_name as "STOP_1_LOCATION"
+    , shipment_stops.loading_type as "STOP_1_STOP_TYPE"
+    , CONVERT_TIMEZONE(shipment_stops.timezone, shipment_stops.arrived_at)::TIMESTAMP_NTZ as "STOP_1_ARRIVED_AT"
+    , CONVERT_TIMEZONE(shipment_stops.timezone, shipment_stops.completed_at)::TIMESTAMP_NTZ as "STOP_1_COMPLETED_AT"
+    , CONVERT_TIMEZONE(shipment_stops.timezone, shipment_stops.shipper_start_time)::TIMESTAMP_NTZ as "STOP_1_START"
+    , CONVERT_TIMEZONE(shipment_stops.timezone, shipment_stops.shipper_end_time)::TIMESTAMP_NTZ as "STOP_1_END"
+    , location_profiles.location_lon as "STOP_1_LON"
+    , location_profiles.location_lat as "STOP_1_LAT"
+    , location_profiles.address_clean as "STOP_1_ADDRESS"
+from core.shipment_stops
+    left join core.location_profiles on shipment_stops.location_profile_id = location_profiles.id
+where order_index = '1'
+),
+
+STOP_2 as (
+select shipment_stops.shipment_id
+    , shipment_stops.location_name as "STOP_2_LOCATION"
+    , shipment_stops.loading_type as "STOP_2_STOP_TYPE"
+    , datediff(hour,CONVERT_TIMEZONE(shipment_stops.timezone, CURRENT_TIMESTAMP)::TIMESTAMP_NTZ, CONVERT_TIMEZONE(shipment_stops.timezone, shipment_stops.shipper_end_time)::TIMESTAMP_NTZ) as "HRS_TO_STOP_2"
+    , CONVERT_TIMEZONE(shipment_stops.timezone, shipment_stops.arrived_at)::TIMESTAMP_NTZ as "STOP_2_ARRIVED_AT"
+    , CONVERT_TIMEZONE(shipment_stops.timezone, shipment_stops.completed_at)::TIMESTAMP_NTZ as "STOP_2_COMPLETED_AT"
+    , CONVERT_TIMEZONE(shipment_stops.timezone, shipment_stops.shipper_start_time)::TIMESTAMP_NTZ as "STOP_2_START"
+    , CONVERT_TIMEZONE(shipment_stops.timezone, shipment_stops.shipper_end_time)::TIMESTAMP_NTZ as "STOP_2_END"
+    , location_profiles.location_lon as "STOP_2_LON"
+    , location_profiles.location_lat as "STOP_2_LAT"
+    , location_profiles.address_clean as "STOP_2_ADDRESS"
+from core.shipment_stops
+    left join core.location_profiles on shipment_stops.location_profile_id = location_profiles.id
+where order_index = '2'
+),
+
+STOP_3 as (
+select shipment_stops.shipment_id
+    , shipment_stops.location_name as "STOP_3_LOCATION"
+    , shipment_stops.loading_type as "STOP_3_STOP_TYPE"
+    , datediff(hour,CONVERT_TIMEZONE(shipment_stops.timezone, CURRENT_TIMESTAMP)::TIMESTAMP_NTZ, CONVERT_TIMEZONE(shipment_stops.timezone, shipment_stops.shipper_end_time)::TIMESTAMP_NTZ) as "HRS_TO_STOP_3"
+    , CONVERT_TIMEZONE(shipment_stops.timezone, shipment_stops.arrived_at)::TIMESTAMP_NTZ as "STOP_3_ARRIVED_AT"
+    , CONVERT_TIMEZONE(shipment_stops.timezone, shipment_stops.completed_at)::TIMESTAMP_NTZ as "STOP_3_COMPLETED_AT"
+    , CONVERT_TIMEZONE(shipment_stops.timezone, shipment_stops.shipper_start_time)::TIMESTAMP_NTZ as "STOP_3_START"
+    , CONVERT_TIMEZONE(shipment_stops.timezone, shipment_stops.shipper_end_time)::TIMESTAMP_NTZ as "STOP_3_END"
+    , location_profiles.location_lon as "STOP_3_LON"
+    , location_profiles.location_lat as "STOP_3_LAT"
+    , location_profiles.address_clean as "STOP_3_ADDRESS"
+from core.shipment_stops
+    left join core.location_profiles on shipment_stops.location_profile_id = location_profiles.id
+where order_index = '3' 
+) ,
+
+heartbeats as (
+select last_known_shipment_locations.shipment_id
+    -- , jobs.short_id
+    --, iff(jobs.last_event_name = 'CREATED' and jobs.carrier_id is not null, 'DRIVER_SOURCED', iff(jobs.on_hold = 'false' and jobs.last_event_name = 'CREATED', 'SOURCING', iff(jobs.last_event_name = 'FINISHED' or jobs.last_event_name = 'COMPLETED_STOP' or jobs.last_event_name = 'CANCELED', jobs.last_event_name, 'ON_HOLD'))) as "STATUS"
+    , jobs.last_event_name as "SHIPMENT_STATUS"
+    , last_known_shipment_locations.location_lon as "HEARTBEAT_LON"
+    , last_known_shipment_locations.location_lat as "HEARTBEAT_LAT"
+    -- , jobs.carrier_id --link on carriers for carrier info
+    -- , carriers.name as "CARRIER"
+    , last_known_shipment_locations.entity as "HEARTBEAT_TYPE"
+    , CONVERT_TIMEZONE('US/Pacific', last_known_shipment_locations.recorded_at)::TIMESTAMP_NTZ as "HEARTBEAT_RECORDED_AT"
+    , trailers_ts.number as "TRAILER_NUMBER"
+    , jobs.on_hold
+from src.last_known_shipment_locations
+    left join core.jobs on last_known_shipment_locations.shipment_id = jobs.id
+    left join src.shipment_trailer_assignments on last_known_shipment_locations.shipment_id = shipment_trailer_assignments.shipment_id
+    left join src.trailers_ts on shipment_trailer_assignments.trailer_key = trailers_ts.key
+    -- left join core.carriers on jobs.carrier_id = carriers.id
+where 1=1
+    QUALIFY row_number() over (partition by jobs.short_id, trailer_number order by last_known_shipment_locations.recorded_at desc) = 1
+-- order by recorded_at DESC
+) , 
+
+exceptions as (
+select *
+from core.shipment_exceptions
+where (category_code = 'PICKUP_BLOCKED'
+        or category_code = 'DROPOFF_BLOCKED'
+        or category_code = 'DRIVER_LATE'
+        or category_code = 'BROKER_REQUEST_CHANGE'
+        or category_code = 'CARRIER_FALL_OFF'
+        or category_code = 'CONFIRMED_TRAILER_FROM_DIFFERENT_YARD'
+        or category_code = 'DRIVER_LATE_NO_NOTIFICATION'
+        or category_code = 'DRIVER_LATE_WITH_NOTIFICATION'
+        or category_code = 'DROPOFF_DELAYED'
+        or category_code = 'DRIVER_UNRESPONSIVE'
+        or category_code = 'DRIVER_MISSING_TRAILER_CONFIRMATION'
+        or category_code = 'DRIVER_CONFIRMED_WRONG_TRAILER'
+        or category_code = 'DRIVER_CONFIRMED_UNKNOWN_TRAILER'
+        or category_code = 'LOAD_CANCELED'
+        or category_code = 'NO_CARRIER_MATCHED'
+        or category_code = 'OVERAGE_SHORTAGE_AND_DAMAGE'
+        or category_code = 'PICKUP_DELAYED'
+        or category_code = 'OTHER'
+        or category_code = 'PRODUCT_OVERAGE'
+        or category_code = 'PRODUCT_REFUSED'
+        or category_code = 'PRODUCT_SHORTAGE'
+        or category_code = 'SHIPMENT_DAMAGED'
+        or category_code = 'SHIPPER_REQUESTED_CHANGE'
+        or category_code = 'UNKNOWN_TRAILER_ASSIGNED'
+        or category_code = 'WRONG_PRODUCT')
+    and resolved_at is null
+)
+
+select pickup.SHORT_ID
+    , LINK
+    , RDD
+    , count(exceptions.short_id) as "OPEN_EXCEPTIONS"
+    , iff(stop_3.shipment_id is null, '1', '2') as "NUMBER_DELIVERIES"
+    , iff(on_hold = 'TRUE', 'ON_HOLD', iff(heartbeats.shipment_status = 'COMPLETED_STOP' and PU_COMPLETED_AT is null, 'ARRIVED_PICKUP', iff(pickup.PU_COMPLETED_AT is not null and stop_1.STOP_1_ARRIVED_AT is null, 'PICKUP_COMPLETE', iff(stop_1.STOP_1_ARRIVED_AT is not null and stop_1.STOP_1_COMPLETED_AT is null, 'ARRIVED_STOP_1', iff(stop_1.STOP_1_COMPLETED_AT is not null and stop_2.STOP_2_ARRIVED_AT is null and stop_2_location is not null, 'STOP_1_COMPLETE', iff(stop_2.STOP_2_ARRIVED_AT is not null and stop_2.STOP_2_COMPLETED_AT is null, 'ARRIVED_STOP_2', iff(STOP_2_COMPLETED_AT is not null and stop_3.shipment_id is null, 'FINISHED', iff(stop_2_completed_at is not null and STOP_3_ARRIVED_AT is null, 'STOP_2_COMPLETE', iff(stop_3.stop_3_arrived_at is not null and stop_3.STOP_3_COMPLETED_AT is null, 'ARRIVED_STOP_3', iff(stop_3.STOP_3_COMPLETED_AT is not null, 'FINISHED', iff(stop_2_location is null and STOP_1_COMPLETED_AT is not null, 'FINISHED', iff(carrier is not null, 'ACCEPTED', 'OFF_HOLD')))))))))))) as "STATUS"
+    , iff(status = 'ACCEPTED', HRS_TO_PU || ' hrs to PU', iff(status = 'PU_COMPLETE', HRS_TO_STOP_1 || ' hrs to STOP_1', iff(status = 'STOP_1_COMPLETE' and stop_2_location is not null, HRS_TO_STOP_2 || ' hrs to STOP_2', iff(status = 'STOP_2_COMPLETE' and STOP_3_LOCATION is not null, HRS_TO_STOP_3 || ' hrs to STOP_3', iff(status = 'FINISHED',null,null))))) as "HRS_TO_STOP"
+    , STOP_1_ARRIVED_AT    
+    , iff(status = 'ACCEPTED', st_distance(ST_MAKEPOINT(heartbeats.HEARTBEAT_LON, heartbeats.HEARTBEAT_LAT), ST_MAKEPOINT(pickup.PU_LON, pickup.PU_LAT)) * 0.000621, iff(status = 'PICKUP_COMPLETE' or status = 'ARRIVED_PICKUP', st_distance(ST_MAKEPOINT(heartbeats.HEARTBEAT_LON, heartbeats.HEARTBEAT_LAT), ST_MAKEPOINT(STOP_1.STOP_1_LON, STOP_1.STOP_1_LAT)) * 0.000621, iff(status = 'STOP_1_COMPLETE' or status = 'ARRIVED_STOP_1', st_distance(ST_MAKEPOINT(heartbeats.HEARTBEAT_LON, heartbeats.HEARTBEAT_LAT), ST_MAKEPOINT(STOP_2.STOP_2_LON, STOP_2.STOP_2_LAT)) * 0.000621, iff(status = 'STOP_2_COMPLETE' or status = 'ARRIVED_STOP_2', st_distance(ST_MAKEPOINT(heartbeats.HEARTBEAT_LON, heartbeats.HEARTBEAT_LAT), ST_MAKEPOINT(STOP_3.STOP_3_LON, STOP_3.STOP_3_LAT)) * 0.000621, null)))) as "MILES_TO_NEXT_STOP"
+    , HEARTBEAT_LON
+    , HEARTBEAT_LAT
+    , CARRIER
+    , iff(HEARTBEAT_TYPE is null, 'NO HEARTBEAT', HEARTBEAT_TYPE) as "HEARTBEAT_TYPE"
+    , HEARTBEAT_RECORDED_AT
+    , trailer_number
+    , PU_LOCATION
+    , PU_STOP_TYPE
+    , PU_ARRIVED_AT
+    , PU_COMPLETED_AT
+    , PU_START
+    , PU_END
+    , PU_LON
+    , PU_LAT
+    , PU_ADDRESS
+    , STOP_1_LOCATION
+    , STOP_1_STOP_TYPE
+    , STOP_1_COMPLETED_AT
+    , STOP_1_START
+    , STOP_1_END
+    , STOP_1_LON
+    , STOP_1_LAT
+    , STOP_1_ADDRESS
+    , STOP_2_LOCATION
+    , STOP_2_STOP_TYPE
+    , STOP_2_ARRIVED_AT
+    , STOP_2_COMPLETED_AT
+    , STOP_2_START
+    , STOP_2_END
+    , STOP_2_LON
+    , STOP_2_LAT
+    , STOP_2_ADDRESS
+    , STOP_3_LOCATION
+    , STOP_3_STOP_TYPE
+    , stop_3_arrived_at
+    , STOP_3_COMPLETED_AT
+    , STOP_3_START
+    , STOP_3_END
+    , STOP_3_LON
+    , STOP_3_LAT
+    , STOP_3_ADDRESS
+from pickup
+    left join heartbeats on pickup.shipment_id = heartbeats.shipment_id
+    left join STOP_1 on pickup.shipment_id = STOP_1.shipment_id
+    left join STOP_2 on pickup.shipment_id = STOP_2.shipment_id
+    left join STOP_3 on pickup.shipment_id = STOP_3.shipment_id
+    left join exceptions on pickup.shipment_id = exceptions.shipment_id
+where 1=1
+    and PU_LOCATION ilike '%5565%'
+    [[and pickup.short_id = {{SHORT_ID}}]]
+    [[and STOP_1_START between {{START}} and {{END}}]]
+group by pickup.SHORT_ID, LINK, RDD, NUMBER_DELIVERIES, STATUS, HRS_TO_STOP, MILES_TO_NEXT_STOP, HEARTBEAT_LON, HEARTBEAT_LAT, CARRIER, HEARTBEAT_TYPE, HEARTBEAT_RECORDED_AT, trailer_number, PU_LOCATION, PU_STOP_TYPE, PU_ARRIVED_AT, PU_COMPLETED_AT, PU_START, PU_END, PU_LON, PU_LAT, PU_ADDRESS, STOP_1_LOCATION, STOP_1_STOP_TYPE, STOP_1_ARRIVED_AT, STOP_1_COMPLETED_AT, STOP_1_START, STOP_1_END, STOP_1_LON, STOP_1_LAT, STOP_1_ADDRESS, STOP_2_LOCATION, STOP_2_STOP_TYPE, STOP_2_ARRIVED_AT, STOP_2_COMPLETED_AT, STOP_2_START, STOP_2_END, STOP_2_LON, STOP_2_LAT, STOP_2_ADDRESS, STOP_3_LOCATION, STOP_3_STOP_TYPE, stop_3_arrived_at, STOP_3_COMPLETED_AT, STOP_3_START, STOP_3_END, STOP_3_LON, STOP_3_LAT, STOP_3_ADDRESS
+order by STOP_1_START
